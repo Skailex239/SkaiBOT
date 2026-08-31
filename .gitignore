@@ -1,0 +1,32 @@
+# Dépendances
+node_modules/
+**/node_modules/
+
+# Sorties de build
+base-game/dist/
+base-game/static/js/
+base-game/static/maps/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# Entraînement / modèles / logs
+agent/runs/
+agent/logs/
+**/runs/
+**/logs/
+*.zip
+*.pt
+*.pth
+training_test.log
+
+# Divers
+.DS_Store
+*.log
+.env
