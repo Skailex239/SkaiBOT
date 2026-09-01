@@ -99,8 +99,42 @@ class GameBridge:
                 )
             return json.loads(resp_line)
 
-    def reset(self, map_name: str = "australia_100x100_nt", num_players: int = 11) -> Dict[str, Any]:
-        r = self._send({"type": "reset", "map_name": map_name, "num_players": num_players})
+    def reset(
+        self,
+        map_name: str = "australia_100x100_nt",
+        num_players: int = 11,
+        obs_size: Optional[int] = None,
+        game_config: Optional[str] = None,
+        win_threshold: Optional[float] = None,
+        max_attacks: Optional[int] = None,
+        spawn_mode: Optional[str] = None,
+        spawn_seed: Optional[int] = None,
+        verbose: bool = False,
+    ) -> Dict[str, Any]:
+        """Démarre une partie.
+
+        obs_size     : le pont renvoie territory_map déjà réduit à obs_size x obs_size
+                       (évite de sérialiser 250 000 nombres par tick sur les grandes cartes).
+        game_config  : "default" = vraies règles d'OpenFront, "test" = ancien comportement
+                       (TestConfig, conquête bridée à 1 tuile/tick).
+        win_threshold: fraction des TUILES TERRESTRES nécessaire pour `has_won`.
+        """
+        cmd: Dict[str, Any] = {"type": "reset", "map_name": map_name, "num_players": num_players}
+        if obs_size:
+            cmd["obs_size"] = int(obs_size)
+        if game_config:
+            cmd["game_config"] = game_config
+        if win_threshold is not None:
+            cmd["win_threshold"] = float(win_threshold)
+        if max_attacks is not None:
+            cmd["max_attacks"] = int(max_attacks)
+        if spawn_mode:
+            cmd["spawn_mode"] = spawn_mode
+        if spawn_seed is not None:
+            cmd["spawn_seed"] = int(spawn_seed) & 0x7FFFFFFF
+        if verbose:
+            cmd["verbose"] = True
+        r = self._send(cmd)
         return r.get("state", r)
 
     def tick(self) -> Dict[str, Any]:
@@ -115,6 +149,12 @@ class GameBridge:
             "intensity": float(intensity),
         })
         return bool(r.get("success", False))
+
+    def cancel_attacks(self) -> int:
+        """Rappelle toutes les attaques en cours (WAIT). Coûte 25 % des troupes
+        engagées : c'est le seul moyen de stopper l'hémorragie de population."""
+        r = self._send({"type": "cancel_attacks"})
+        return int(r.get("cancelled", 0))
 
     def close(self):
         if self.proc is None:

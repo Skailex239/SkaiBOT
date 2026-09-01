@@ -558,13 +558,13 @@ class OpenFrontEnvFullGame(gym.Env):
 
         for i, cluster in enumerate(clusters[:5]):
             # Feature 0: Normalized tile count
-            cluster_features[i, 0] = len(cluster['tiles']) / max(state.tiles_owned, 1)
+            cluster_features[i, 0] = cluster.get('tile_count', len(cluster.get('tiles', []))) / max(state.tiles_owned, 1)
 
             # Feature 1: Normalized troop count
             cluster_features[i, 1] = cluster['troop_count'] / max(state.population, 1)
 
             # Feature 2: Border ratio
-            cluster_features[i, 2] = len(cluster['border_tiles']) / max(len(cluster['tiles']), 1)
+            cluster_features[i, 2] = len(cluster['border_tiles']) / max(cluster.get('tile_count', len(cluster.get('tiles', []))), 1)
 
             # Feature 3-4: Normalized center position
             cluster_features[i, 3] = cluster['center_x'] / state.total_tiles ** 0.5
