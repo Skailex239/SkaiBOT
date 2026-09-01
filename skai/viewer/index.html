@@ -86,8 +86,10 @@
     <div class="controls">
       <label class="note">Carte :
         <select id="mapSelect">
-          <option value="australia_100x100_nt" selected>Australie 100×100 (rapide)</option>
-          <option value="australia_100x100">Australie 100×100 (terrain)</option>
+          <option value="australia_100x100" selected>Australie 100×100 (vraies terres, rapide)</option>
+          <option value="australia_100x100_nt">Australie 100×100 (sans océan)</option>
+          <option value="australia_500x500">Australie 500×500 (vraies terres)</option>
+          <option value="australia_real_500x375">Australie entière 500×375 (continent réel)</option>
           <option value="australia_256x256">Australie 256×256</option>
         </select>
       </label>
@@ -100,10 +102,19 @@
       </label>
       <button class="primary" id="restart">↻ Relancer la partie</button>
     </div>
-    <p class="note">
-      Version du moment : l'IA utilise une <b>politique d'expansion simple</b> (elle attaque le terrain libre
-      autour d'elle). C'est pour <i>voir une partie en marche</i>. Le vrai niveau viendra de l'entraînement
-      RL / self-play (feuille de route dans <code>docs/ROADMAP.md</code>).
+    <div class="controls">
+      <label class="note">Modèle entraîné (.zip) :
+        <input id="modelPath" size="34" placeholder="skai/models/skai_ppo_australia_100x100.zip"
+               style="background:#0b1320;color:#e8eef7;border:1px solid #24344d;border-radius:6px;padding:4px 8px">
+      </label>
+      <button id="loadModel">🧠 Charger ce modèle</button>
+      <button id="demoPolicy">↩ politique de démo</button>
+    </div>
+    <p class="note" id="policyNote">
+      Sans modèle chargé, l'IA joue la <b>politique de démo</b> (elle attaque la frontière la plus riche :
+      <code>agent_policy.py</code>). Avec un <code>.zip</code> issu de <code>skai/train_simple.py</code>,
+      c'est le <b>réseau entraîné</b> qui décide à chaque tick — mêmes observations que pendant
+      l'entraînement (fonctions partagées dans <code>skai/rl_env.py</code>).
     </p>
   </section>
 
@@ -111,6 +122,7 @@
     <div class="card">
       <h2>Statut de l'IA</h2>
       <div class="stat"><span>Carte</span><b id="m_map">—</b></div>
+      <div class="stat"><span>IA</span><b id="m_policy">—</b></div>
       <div class="stat"><span>Tick</span><b id="m_tick">—</b></div>
       <div class="stat"><span>Rang</span><b id="m_rank">—</b></div>
       <div class="stat"><span>Joueurs vivants</span><b id="m_alive">—</b></div>
@@ -168,6 +180,7 @@ async function refresh(){
     st.className = "badge " + (s.status === "en_cours" ? "live" : s.status === "chargement" ? "loading" : s.status === "terminé" ? "over" : "");
     st.textContent = s.status === "en_cours" ? "● EN DIRECT" : s.status === "chargement" ? "⏳ chargement carte…" : s.status === "terminé" ? (s.has_won ? "🏆 victoire" : "💀 partie terminée") : s.status === "erreur" ? "⚠️ erreur (voir le panneau)" : s.status;
     document.getElementById("m_map").textContent = s.map || "—";
+    document.getElementById("m_policy").textContent = s.policy || "—";
     document.getElementById("m_tick").textContent = fmt(s.tick);
     document.getElementById("m_rank").textContent = s.rank ? ("#" + s.rank + " / " + s.total_players) : "—";
     document.getElementById("m_alive").textContent = s.alive_players || "—";
@@ -191,6 +204,20 @@ document.getElementById("restart").addEventListener("click", () => {
   const players = document.getElementById("playersSelect").value;
   fetch(`/api/reset?map=${map}&players=${players}`, { method: "POST" });
 });
+
+async function setModel(path){
+  const st = document.getElementById("status");
+  st.textContent = "⏳ chargement du modèle…";
+  const r = await fetch("/api/model?path=" + encodeURIComponent(path || ""), { method: "POST" });
+  const j = await r.json();
+  document.getElementById("policyNote").textContent = j.message;
+  document.getElementById("m_policy").textContent = j.policy;
+  refresh();
+}
+
+document.getElementById("loadModel").addEventListener("click", () =>
+  setModel(document.getElementById("modelPath").value.trim()));
+document.getElementById("demoPolicy").addEventListener("click", () => setModel(""));
 
 setInterval(refresh, 200);
 refresh();

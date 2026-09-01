@@ -5,11 +5,16 @@ Lance une partie OpenFront en local, fait jouer l'IA (politique de démo pour l'
 et diffuse l'état via une petite API HTTP consommée par la page web `index.html`.
 
 Démarrage :
-    cd skai/viewer
-    python -m uvicorn ...   # non : stdlib seulement
-    python server.py
+    python skai/viewer/server.py                                  # politique de démo (gloutonne)
+    python skai/viewer/server.py --model skai/models/skai_ppo_australia_100x100.zip
+                                                                  # le VRAI réseau entraîné
 puis ouvre l'URL affichée (ex. http://localhost:8080).
+
+On peut changer de modèle à chaud sans redémarrer :
+    curl -X POST "http://localhost:8080/api/model?path=skai/models/skai_ppo_australia_100x100_best.zip"
+    curl -X POST "http://localhost:8080/api/model?path="        -> revient à la gloutonne
 """
+import argparse
 import json
 import os
 import sys
@@ -23,6 +28,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from skai.viewer.bridge import GameBridge          # noqa: E402
 from skai.viewer.agent_policy import play_one_tick  # noqa: E402
+
+MODEL_PATH = os.environ.get("SKAI_MODEL", "")   # vide => politique de démo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MAP = "australia_100x100_nt"
@@ -61,6 +68,28 @@ class GameSession:
         self.map_name = DEFAULT_MAP
         self.num_players = DEFAULT_PLAYERS
         self.last_reset = 0.0
+        self.player = None                 # ModelPlayer si un .zip est chargé
+        self.policy_name = "glouton (démo)"
+        self.model_path = ""
+        self.max_ticks = 1500
+
+    def set_model(self, path):
+        """Charge un modèle SB3 (path vide = politique de démo). Peut être appelé à chaud."""
+        with self.lock:
+            if not path:
+                self.player, self.model_path = None, ""
+                self.policy_name = "glouton (démo)"
+                return "politique de démo (glouton) réactivée"
+            try:
+                from skai.model_policy import ModelPlayer
+                self.player = ModelPlayer(path, max_ticks=self.max_ticks)
+                self.model_path = path
+                self.policy_name = self.player.name
+                return f"modèle chargé : {path}"
+            except Exception as e:  # noqa: BLE001
+                self.player, self.model_path = None, ""
+                self.policy_name = "glouton (démo) — erreur de modèle"
+                return f"impossible de charger {path} : {e} (retour à la gloutonne)"
 
     def reset(self, map_name=DEFAULT_MAP, num_players=DEFAULT_PLAYERS):
         with self.lock:
@@ -70,7 +99,9 @@ class GameSession:
         # Le reset charge la carte (plusieurs secondes) : on le fait hors du verrou long
         try:
             self.bridge.start()
-            state = self.bridge.reset(map_name, num_players)
+            state = self.bridge.reset(map_name, num_players, game_config="default")
+            if self.player is not None and hasattr(self.player, "reset"):
+                self.player.reset()   # l'historique de frames doit repartir de zéro
             with self.lock:
                 self.state = state
                 self.actions = []
@@ -91,7 +122,9 @@ class GameSession:
             state = self.state
         # Décision de l'IA + avance d'un tick
         try:
-            actions = play_one_tick(self.bridge, state)
+            player = self.player
+            actions = player.play_one_tick(self.bridge, state) if player is not None \
+                else play_one_tick(self.bridge, state)
             new_state = self.bridge.tick()
             with self.lock:
                 self.state = new_state
@@ -111,7 +144,7 @@ class GameSession:
             h = len(s["territory_map"])
             clusters = [
                 {"id": c["id"], "x": c["center_x"] / w, "y": c["center_y"] / h,
-                 "tiles": len(c.get("tiles", [])), "troops": c.get("troop_count", 0)}
+                 "tiles": c.get("tile_count", len(c.get("tiles", []))), "troops": c.get("troop_count", 0)}
                 for c in s.get("clusters", [])
             ]
             return {
@@ -133,6 +166,8 @@ class GameSession:
                 "has_won": s.get("has_won"),
                 "has_lost": s.get("has_lost"),
                 "clusters": clusters,
+                "policy": self.policy_name,
+                "model": self.model_path,
                 "actions": self.actions,
                 "rle": encode_rle(s["territory_map"]),
             }
@@ -180,19 +215,40 @@ class Handler(BaseHTTPRequestHandler):
             players = int(qs.get("players", [DEFAULT_PLAYERS])[0])
             threading.Thread(target=SESSION.reset, args=(map_name, players), daemon=True).start()
             self._send(200, {"ok": True, "status": "chargement"})
+        elif url.path == "/api/model":
+            qs = parse_qs(url.query)
+            msg = SESSION.set_model(qs.get("path", [""])[0])
+            self._send(200, {"ok": True, "message": msg, "policy": SESSION.policy_name})
         else:
             self._send(404, {"error": "not found"})
 
 
 def main():
-    port = int(os.environ.get("PORT", "8080"))
+    ap = argparse.ArgumentParser(description="Visualiseur SkaiBOT (stdlib uniquement)")
+    ap.add_argument("--model", default=MODEL_PATH,
+                    help=".zip sauvegardé par skai/train_simple.py — sinon la gloutonne de démo joue")
+    ap.add_argument("--map", default=DEFAULT_MAP)
+    ap.add_argument("--players", type=int, default=DEFAULT_PLAYERS)
+    ap.add_argument("--max-ticks", type=int, default=1500)
+    ap.add_argument("--stochastic", action="store_true",
+                    help="échantillonne au lieu de prendre l'action maximale (voit l'exploration)")
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
+    args = ap.parse_args()
+
+    SESSION.map_name, SESSION.num_players, SESSION.max_ticks = args.map, args.players, args.max_ticks
+    if args.model:
+        print(SESSION.set_model(args.model))
+        if args.stochastic and SESSION.player is not None:
+            SESSION.player.deterministic = False
+
     threading.Thread(target=background_loop, daemon=True).start()
     # Lancer une première partie automatiquement
-    threading.Thread(target=SESSION.reset, daemon=True).start()
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
-    print(f"=== SkaiBOT visualiseur ===")
-    print(f"Ouvre ton navigateur sur :  http://localhost:{port}")
-    print(f"Carte par défaut : {DEFAULT_MAP} — pour relancer : POST /api/reset?map=...&players=...")
+    threading.Thread(target=SESSION.reset, args=(SESSION.map_name, SESSION.num_players), daemon=True).start()
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
+    print("=== SkaiBOT visualiseur ===")
+    print(f"Ouvre ton navigateur sur :  http://localhost:{args.port}")
+    print(f"Carte : {SESSION.map_name} ({SESSION.num_players} joueurs) — IA : {SESSION.policy_name}")
+    print("Pour relancer : POST /api/reset?map=...&players=... — changer d'IA : POST /api/model?path=...")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
