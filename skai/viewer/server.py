@@ -75,6 +75,7 @@ class GameSession:
 
     def set_model(self, path):
         """Charge un modèle SB3 (path vide = politique de démo). Peut être appelé à chaud."""
+        prev, prev_name, prev_path = self.player, self.policy_name, self.model_path
         with self.lock:
             if not path:
                 self.player, self.model_path = None, ""
@@ -87,9 +88,10 @@ class GameSession:
                 self.policy_name = self.player.name
                 return f"modèle chargé : {path}"
             except Exception as e:  # noqa: BLE001
-                self.player, self.model_path = None, ""
-                self.policy_name = "glouton (démo) — erreur de modèle"
-                return f"impossible de charger {path} : {e} (retour à la gloutonne)"
+                # on NE casse pas ce qui jouait déjà : un chemin tapé de travers dans la
+                # page ne doit pas éteindre le réseau en train de jouer.
+                self.player, self.model_path, self.policy_name = prev, prev_path, prev_name
+                return f"impossible de charger {path} : {e} — modèle en cours conservé ({prev_name})"
 
     def reset(self, map_name=DEFAULT_MAP, num_players=DEFAULT_PLAYERS):
         with self.lock:
