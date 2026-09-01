@@ -2,6 +2,11 @@
 node_modules/
 **/node_modules/
 
+# Cartes générées par skai/make_maps.py (régénérables depuis OpenFrontIO/main)
+base-game/resources/maps/_upstream_australia/
+base-game/resources/maps/australia_real_2000x1500/
+base-game/resources/maps/australia_real_1000x750/
+
 # Sorties de build
 base-game/dist/
 base-game/static/js/

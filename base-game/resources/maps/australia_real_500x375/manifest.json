@@ -1,20 +1,20 @@
 {
-  "name": "australia_100x100",
+  "name": "australia_real_500x375",
   "map": {
-    "width": 100,
-    "height": 100,
-    "num_land_tiles": 6004
+    "width": 500,
+    "height": 375,
+    "num_land_tiles": 81252
   },
   "mini_map": {
-    "width": 50,
-    "height": 50,
-    "num_land_tiles": 1523
+    "width": 250,
+    "height": 187,
+    "num_land_tiles": 20434
   },
   "nations": [
     {
       "coordinates": [
-        5,
-        48
+        115,
+        180
       ],
       "flag": "aus_wesaus",
       "name": "Western Australia",
@@ -22,8 +22,8 @@
     },
     {
       "coordinates": [
-        36,
-        22
+        241,
+        85
       ],
       "flag": "aus_norter",
       "name": "Northern Territory",
@@ -31,8 +31,8 @@
     },
     {
       "coordinates": [
-        33,
-        61
+        230,
+        228
       ],
       "flag": "aus_souaus",
       "name": "South Australia",
@@ -40,8 +40,8 @@
     },
     {
       "coordinates": [
-        65,
-        81
+        358,
+        305
       ],
       "flag": "aus_vic",
       "name": "Victoria",
@@ -49,8 +49,8 @@
     },
     {
       "coordinates": [
-        68,
-        37
+        372,
+        138
       ],
       "flag": "aus_quelan",
       "name": "Queensland",
@@ -58,8 +58,8 @@
     },
     {
       "coordinates": [
-        75,
-        68
+        401,
+        256
       ],
       "flag": "aus_nsw",
       "name": "New South Wales",
@@ -67,8 +67,8 @@
     },
     {
       "coordinates": [
-        75,
-        92
+        398,
+        345
       ],
       "flag": "aus_tas",
       "name": "Tasmania",
@@ -80,9 +80,9 @@
     "generated_by": "skai/make_maps.py"
   },
   "crop": {
-    "offset_x": 371,
+    "offset_x": 0,
     "offset_y": 0,
-    "source_width": 1995,
-    "source_height": 1498
+    "source_width": 2000,
+    "source_height": 1500
   }
 }
