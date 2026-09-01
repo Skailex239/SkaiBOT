@@ -270,7 +270,7 @@ class OpenFrontEnvClusters(gym.Env):
             clusters[i, 0] = 1.0  # exists
             clusters[i, 1] = cluster['center_x'] / max(state.territory_map.shape[1] if hasattr(state.territory_map, 'shape') else 512, 1)  # normalized x
             clusters[i, 2] = cluster['center_y'] / max(state.territory_map.shape[0] if hasattr(state.territory_map, 'shape') else 512, 1)  # normalized y
-            clusters[i, 3] = len(cluster['tiles']) / total_tiles  # size percentage
+            clusters[i, 3] = cluster.get('tile_count', len(cluster.get('tiles', []))) / total_tiles  # size %
             clusters[i, 4] = cluster['troop_count'] / total_troops  # troop percentage
             clusters[i, 5] = len(cluster['border_tiles']) / total_borders  # border percentage
 

@@ -3,21 +3,77 @@
   "map": {
     "width": 500,
     "height": 500,
-    "num_land_tiles": 53
+    "num_land_tiles": 207613
   },
   "mini_map": {
     "width": 250,
     "height": 250,
-    "num_land_tiles": 23
+    "num_land_tiles": 51992
   },
-  "nations": [],
-  "source": {
-    "original_map": "australia",
-    "crop_region": {
-      "x": 1000,
-      "y": 1000,
-      "width": 500,
-      "height": 500
+  "nations": [
+    {
+      "coordinates": [
+        136,
+        52
+      ],
+      "flag": "aus_norter",
+      "name": "Northern Territory",
+      "strength": 1
+    },
+    {
+      "coordinates": [
+        120,
+        274
+      ],
+      "flag": "aus_souaus",
+      "name": "South Australia",
+      "strength": 1
+    },
+    {
+      "coordinates": [
+        301,
+        391
+      ],
+      "flag": "aus_vic",
+      "name": "Victoria",
+      "strength": 1
+    },
+    {
+      "coordinates": [
+        320,
+        135
+      ],
+      "flag": "aus_quelan",
+      "name": "Queensland",
+      "strength": 1
+    },
+    {
+      "coordinates": [
+        361,
+        316
+      ],
+      "flag": "aus_nsw",
+      "name": "New South Wales",
+      "strength": 1
+    },
+    {
+      "coordinates": [
+        357,
+        453
+      ],
+      "flag": "aus_tas",
+      "name": "Tasmania",
+      "strength": 1
     }
+  ],
+  "source": {
+    "original_map": "australia (OpenFrontIO/main)",
+    "generated_by": "skai/make_maps.py"
+  },
+  "crop": {
+    "offset_x": 576,
+    "offset_y": 204,
+    "source_width": 2000,
+    "source_height": 1500
   }
 }
