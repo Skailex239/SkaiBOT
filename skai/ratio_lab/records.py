@@ -16,7 +16,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 CSV_COLUMNS = [
-    "ts", "map", "duration_s", "ratio_pct", "interval", "seed", "repeat_idx",
+    "ts", "map", "duration_s", "ratio_pct", "every_s", "interval_ticks", "seed", "repeat_idx",
     "max_attacks", "tiles_start", "tiles_end", "tiles_gained", "land_tiles",
     "land_pct", "tiles_per_sec", "tiles_per_tick", "active_ticks",
     "troops_start", "troops_end", "troops_min", "waves_attempted", "waves_ok",
@@ -90,7 +90,7 @@ def _group_key(run: Dict[str, Any]) -> str:
 def _summarize(run: Dict[str, Any]) -> Dict[str, Any]:
     """Les champs qui intéressent le tableau des records."""
     keys = [
-        "ts", "map", "duration_s", "ratio_pct", "interval", "seed", "repeat_idx",
+        "ts", "map", "duration_s", "ratio_pct", "every_s", "interval_ticks", "seed", "repeat_idx",
         "tiles_gained", "land_pct", "tiles_per_sec", "tiles_per_tick", "active_ticks",
         "troops_start", "troops_end", "troops_min", "waves_attempted", "waves_ok",
         "t25_ticks", "t50_ticks", "t75_ticks", "status",
@@ -121,10 +121,10 @@ def build_records(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         best_overall = max(gruns, key=lambda r: r["tiles_per_sec"])
         leaderboard = sorted(gruns, key=lambda r: -r["tiles_per_sec"])[:20]
 
-        # matrice ratio × cadence : meilleure run de chaque case
+        # matrice ratio × fréquence : meilleure run de chaque case
         matrix: Dict[str, Any] = {}
         for r in gruns:
-            cell = f"{r['ratio_pct']}x{r['interval']}"
+            cell = f"{r['ratio_pct']}x{r['every_s']}"
             cur = matrix.get(cell)
             if cur is None or r["tiles_per_sec"] > cur["tiles_per_sec"]:
                 matrix[cell] = _summarize(r)
@@ -145,8 +145,8 @@ def build_records(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
             "best_overall": _summarize(best_overall),
             "leaderboard": [_summarize(r) for r in leaderboard],
             "matrix": matrix,
-            "best_by_ratio": _best_index("ratio_pct"),   # meilleure cadence pour un ratio donné
-            "best_by_interval": _best_index("interval"),  # meilleur ratio pour une cadence donnée
+            "best_by_ratio": _best_index("ratio_pct"),   # meilleure fréquence pour un ratio donné
+            "best_by_every": _best_index("every_s"),     # meilleur ratio pour une fréquence donnée
         })
 
     return {

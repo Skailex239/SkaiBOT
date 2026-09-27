@@ -3,7 +3,7 @@
 Aucune dépendance (Python stdlib uniquement). Elle sert :
 - les fichiers de `webui/` (la page) ;
 - `/api/state`  : runs + records + état du balayage en cours ;
-- `/api/sweep`  : LANCE un balayage depuis la page (ratios, cadence, durée configurables) ;
+- `/api/sweep`  : LANCE un balayage depuis la page (ratios, fréquence, durée configurables) ;
 - `/api/clear`  : efface les résultats.
 
 Démarrage :
@@ -35,7 +35,7 @@ DEFAULTS = {
     "map": sweep.DEFAULT_MAP,
     "duration_s": sweep.DEFAULT_DURATION_S,
     "ratios": sweep.DEFAULT_RATIOS,
-    "intervals": sweep.DEFAULT_INTERVALS,
+    "every": sweep.DEFAULT_EVERY,
     "repeats": 1,
     "jobs": max(1, min(4, (os.cpu_count() or 2))),
     "max_attacks": sweep.DEFAULT_MAX_ATTACKS,
@@ -66,7 +66,7 @@ class SweepStatus:
             self.update(running=True, done=0, total=ev["total"], params=ev.get("cfg"),
                         started_at=time.strftime("%H:%M:%S"), finished_at=None, error=None)
         elif ev["event"] == "run_start":
-            self.update(current=f"ratio {ev['ratio_pct']} % | cadence {ev['interval']} ticks")
+            self.update(current=f"ratio {ev['ratio_pct']} % | toutes les {ev['every_s']:g} s")
         elif ev["event"] == "run_done":
             self.update(done=ev["done"], total=ev["total"])
         elif ev["event"] == "sweep_done":
@@ -86,7 +86,7 @@ def launch_sweep(params: Dict[str, Any]) -> None:
         "map": str(params.get("map") or DEFAULTS["map"]),
         "duration_s": float(params.get("duration_s") or DEFAULTS["duration_s"]),
         "ratios": sweep.parse_int_list(params.get("ratios") or DEFAULTS["ratios"], "ratios"),
-        "intervals": sweep.parse_int_list(params.get("intervals") or DEFAULTS["intervals"], "intervals"),
+        "every": sweep.parse_float_list(params.get("every") or DEFAULTS["every"], "every"),
         "repeats": max(1, int(params.get("repeats") or DEFAULTS["repeats"])),
         "jobs": max(1, min(8, int(params.get("jobs") or DEFAULTS["jobs"]))),
         "max_attacks": max(1, int(params.get("max_attacks") or DEFAULTS["max_attacks"])),

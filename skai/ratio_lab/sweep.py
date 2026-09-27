@@ -1,19 +1,19 @@
-"""RatioLab — le bot qui teste toutes les combinaisons « ratio d'attaque × cadence ».
+"""RatioLab — le bot qui teste toutes les combinaisons « ratio d'attaque × fréquence ».
 
 Principe
 --------
 On lance une partie sur une ZONE TOTALEMENT VERTE (terra nullius, 1 seul joueur,
 aucun bot) et on fait jouer un bot déterministe :
 
-    tous les `interval` ticks, il envoie une VAGUE d'attaques dans les 8 directions,
-    chaque attaque engage `ratio` % de ses troupes disponibles.
+    toutes les `every_s` secondes, il envoie une VAGUE d'attaques dans les 8
+    directions, chaque attaque engage `ratio` % de ses troupes disponibles.
 
-Chaque combinaison (ratio, cadence) est rejouée sur une partie fraîche, et le bot
-mesure la VITESSE DE CONQUÊTE réelle (tuiles gagnées par seconde de jeu). Les
+Chaque combinaison (ratio %, fréquence) est rejouée sur une partie fraîche, et le
+bot mesure la VITESSE DE CONQUÊTE réelle (tuiles gagnées par seconde de jeu). Les
 résultats s'accumulent dans `results/` et les records sont affichés par la petite
 UI web (`server.py`).
 
-Rappel de mécanique OpenFront (1 tick = 100 ms → 10 ticks = 1 s de jeu) :
+Rappel de mécanique OpenFront (10 ticks = 1 s de jeu ; 1 tick = 100 ms) :
 - conquête de terre neutre : coût fixe de 16/20/24 troupes par tuile (plaines/
   hauts-plateaux/montagnes), mais la VITESSE dépend du nombre de troupes engagées
   par attaque — d'où l'intérêt de balayer les ratios ;
@@ -26,7 +26,7 @@ Exemples
 python skai/ratio_lab/sweep.py
 
 # Test rapide :
-python skai/ratio_lab/sweep.py --ratios 10,50,100 --intervals 1,5,20 --duration 30
+python skai/ratio_lab/sweep.py --ratios 10,50,100 --every 0.5,1,5 --duration 30
 
 # Paralléliser sur 4 cœurs, 3 répétitions par combinaison :
 python skai/ratio_lab/sweep.py --jobs 4 --repeats 3
@@ -55,7 +55,7 @@ DIRECTIONS = list(range(8))    # N, NE, E, SE, S, SW, W, NW
 DEFAULT_MAP = "australia_100x100_nt"   # 100 % de terres => zone totalement verte
 DEFAULT_DURATION_S = 60                # « une minute » par test, configurable
 DEFAULT_RATIOS = "10,20,30,40,50,60,70,80,90,100"
-DEFAULT_INTERVALS = "1,2,3,5,8,12,20"
+DEFAULT_EVERY = "0.1,0.2,0.5,1,2,3,5"  # fréquence : une vague toutes les N SECONDES
 DEFAULT_SEED = 12345
 DEFAULT_MAX_ATTACKS = 8
 
@@ -74,6 +74,20 @@ def parse_int_list(text: str, name: str) -> List[int]:
             out.append(int(part))
         except ValueError:
             raise SystemExit(f"valeur invalide pour {name}: {part!r} (attendu: 1,2,3)")
+    if not out:
+        raise SystemExit(f"{name} ne peut pas être vide")
+    return out
+
+
+def parse_float_list(text: str, name: str) -> List[float]:
+    out: List[float] = []
+    for part in str(text).replace(" ", "").split(","):
+        if not part:
+            continue
+        try:
+            out.append(float(part))
+        except ValueError:
+            raise SystemExit(f"valeur invalide pour {name}: {part!r} (attendu: 0.5,1,2)")
     if not out:
         raise SystemExit(f"{name} ne peut pas être vide")
     return out
@@ -103,20 +117,23 @@ def close_worker_bridges() -> None:
 
 def run_single(
     ratio_pct: int,
-    interval: int,
+    every_s: float,
     cfg: Dict[str, Any],
     repeat_idx: int = 0,
 ) -> Dict[str, Any]:
-    """Une partie = un test d'une combinaison (ratio %, cadence en ticks).
+    """Une partie = un test d'une combinaison (ratio %, fréquence en secondes).
 
-    Mesure la conquête pendant `cfg['duration_s']` SECONDES DE JEU à partir de la
-    première attaque acceptée par le moteur (l'immunité de spawn n'est pas comptée).
+    Le bot envoie une vague d'attaques toutes les `every_s` SECONDES de jeu
+    (converti en ticks moteur : 10 ticks = 1 s, minimum 1 tick). La conquête est
+    mesurée pendant `cfg['duration_s']` SECONDES DE JEU à partir de la première
+    attaque acceptée par le moteur (l'immunité de spawn n'est pas comptée).
     """
     bridge = _worker_bridge()
     intensity = max(0.01, min(1.0, ratio_pct / 100.0))
     seed = int(cfg.get("seed", DEFAULT_SEED)) + repeat_idx * 7919
     duration_s = float(cfg["duration_s"])
     duration_ticks = max(1, round(duration_s * TICKS_PER_SECOND))
+    interval_ticks = max(1, round(float(every_s) * TICKS_PER_SECOND))
     map_name = cfg["map"]
     max_attacks = int(cfg.get("max_attacks", DEFAULT_MAX_ATTACKS))
     players = int(cfg.get("players", 1))
@@ -127,7 +144,8 @@ def run_single(
         "map": map_name,
         "duration_s": duration_s,
         "ratio_pct": int(ratio_pct),
-        "interval": int(interval),
+        "every_s": float(every_s),
+        "interval_ticks": interval_ticks,
         "seed": seed,
         "repeat_idx": int(repeat_idx),
         "max_attacks": max_attacks,
@@ -211,8 +229,8 @@ def run_single(
         if active_ticks >= duration_ticks:
             break
 
-        # --- Vague suivante tous les `interval` ticks ("la vitesse d'envoi")
-        if active_ticks % interval == 0:
+        # --- Vague suivante toutes les `every_s` secondes (la fréquence d'envoi)
+        if active_ticks % interval_ticks == 0:
             waves_attempted += 1
             ok = 0
             for d in DIRECTIONS:
@@ -250,12 +268,12 @@ def run_single(
 
 # --------------------------------------------------------------------------- le balayage
 
-def build_task_list(cfg: Dict[str, Any]) -> List[Tuple[int, int, int]]:
-    tasks: List[Tuple[int, int, int]] = []
+def build_task_list(cfg: Dict[str, Any]) -> List[Tuple[int, float, int]]:
+    tasks: List[Tuple[int, float, int]] = []
     for repeat_idx in range(int(cfg.get("repeats", 1))):
         for ratio in cfg["ratios"]:
-            for interval in cfg["intervals"]:
-                tasks.append((int(ratio), int(interval), repeat_idx))
+            for every_s in cfg["every"]:
+                tasks.append((int(ratio), float(every_s), repeat_idx))
     return tasks
 
 
@@ -282,16 +300,16 @@ def run_sweep(
     runs: List[Dict[str, Any]] = []
     done = 0
 
-    def _one(task: Tuple[int, int, int]) -> Dict[str, Any]:
-        ratio, interval, repeat_idx = task
-        emit({"event": "run_start", "ratio_pct": ratio, "interval": interval, "repeat_idx": repeat_idx})
+    def _one(task: Tuple[int, float, int]) -> Dict[str, Any]:
+        ratio, every_s, repeat_idx = task
+        emit({"event": "run_start", "ratio_pct": ratio, "every_s": every_s, "repeat_idx": repeat_idx})
         try:
-            return run_single(ratio, interval, cfg, repeat_idx)
+            return run_single(ratio, every_s, cfg, repeat_idx)
         except Exception as e:  # noqa: BLE001
             return {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "map": cfg["map"], "duration_s": cfg["duration_s"],
-                "ratio_pct": ratio, "interval": interval, "repeat_idx": repeat_idx,
+                "ratio_pct": ratio, "every_s": every_s, "repeat_idx": repeat_idx,
                 "status": "error", "error": str(e),
                 "wall_time_s": 0.0,
             }
@@ -313,7 +331,7 @@ def run_sweep(
     else:
         # Chaque thread de travail possède SON pont Node : il le ferme à la fin de
         # son file de tâches (et le rouvre au besoin), aucun processus ne fuit.
-        queue: "queue_mod.Queue[Tuple[int, int, int]]" = queue_mod.Queue()
+        queue: "queue_mod.Queue[Tuple[int, float, int]]" = queue_mod.Queue()
         for t in tasks:
             queue.put(t)
 
@@ -344,7 +362,7 @@ def _public_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "map": cfg["map"],
         "duration_s": cfg["duration_s"],
         "ratios": cfg["ratios"],
-        "intervals": cfg["intervals"],
+        "every": cfg["every"],
         "repeats": cfg.get("repeats", 1),
         "jobs": cfg.get("jobs", 1),
         "max_attacks": cfg.get("max_attacks", DEFAULT_MAX_ATTACKS),
@@ -357,11 +375,12 @@ def _public_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def main(argv: Optional[List[str]] = None) -> None:
     ap = argparse.ArgumentParser(
-        description="RatioLab — teste toutes les combinaisons ratio d'attaque × cadence sur zone verte.",
+        description="RatioLab — teste toutes les combinaisons ratio d'attaque × fréquence sur zone verte.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--ratios", default=DEFAULT_RATIOS, help="pourcents de troupes envoyés par attaque")
-    ap.add_argument("--intervals", default=DEFAULT_INTERVALS, help="ticks entre deux vagues d'attaque (10 ticks = 1 s)")
+    ap.add_argument("--every", default=DEFAULT_EVERY,
+                    help="fréquence d'attaque : une vague toutes les N SECONDES de jeu (0.5,1,2…)")
     ap.add_argument("--duration", type=float, default=DEFAULT_DURATION_S, help="durée de chaque test en SECONDES de jeu")
     ap.add_argument("--map", default=DEFAULT_MAP, help="carte du dépôt (zone verte = 1 joueur)")
     ap.add_argument("--repeats", type=int, default=1, help="répétitions par combinaison (graines décalées)")
@@ -377,7 +396,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "map": args.map,
         "duration_s": args.duration,
         "ratios": parse_int_list(args.ratios, "--ratios"),
-        "intervals": parse_int_list(args.intervals, "--intervals"),
+        "every": parse_float_list(args.every, "--every"),
         "repeats": max(1, args.repeats),
         "jobs": max(1, args.jobs),
         "max_attacks": args.max_attacks,
@@ -389,8 +408,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     total = len(build_task_list(cfg))
     print(f"🧪 RatioLab — {total} tests × {cfg['duration_s']:g} s de jeu "
           f"(carte {cfg['map']}, {cfg['players']} joueur(s))")
-    print(f"   ratios : {cfg['ratios']}")
-    print(f"   cadences (ticks entre 2 vagues) : {cfg['intervals']}")
+    print(f"   ratios d'attaque : {cfg['ratios']} %")
+    print(f"   fréquences : une vague toutes les {', '.join(f'{e:g}' for e in cfg['every'])} s")
     print()
 
     t0 = time.time()
@@ -400,26 +419,26 @@ def main(argv: Optional[List[str]] = None) -> None:
             return
         if ev["event"] == "run_done":
             r = ev["run"]
-            if r.get("status") == "ok":
+            if r.get("status") == "ok" or r.get("status") == "won":
                 print(f"  [{ev['done']}/{ev['total']}] ratio {r['ratio_pct']:>3} % | "
-                      f"cadence {r['interval']:>2} ticks | "
+                      f"toutes les {r['every_s']:>4g} s | "
                       f"→ {r['tiles_per_sec']:>7.2f} tuiles/s "
                       f"({r['tiles_gained']} tuiles en {r['active_ticks'] / 10:.0f} s, "
                       f"{r.get('land_pct', 0) * 100:.1f} % de la carte)")
             else:
                 print(f"  [{ev['done']}/{ev['total']}] ratio {r['ratio_pct']} % | "
-                      f"cadence {r['interval']} | ✗ {r.get('status')}: {r.get('error', '')[:80]}")
+                      f"toutes les {r.get('every_s', '?')} s | ✗ {r.get('status')}: {r.get('error', '')[:80]}")
         elif ev["event"] == "sweep_done":
             print(f"\n✅ Balayage terminé en {time.time() - t0:.0f} s.")
 
     runs = run_sweep(cfg, status_cb=cli_status)
 
-    ok = [r for r in runs if r.get("status") == "ok"]
+    ok = [r for r in runs if r.get("status") in ("ok", "won")]
     print()
     if ok:
         best = max(ok, key=lambda r: r["tiles_per_sec"])
         print("🏆 Meilleure combinaison de ce balayage :")
-        print(f"   ratio {best['ratio_pct']} % | cadence 1 vague / {best['interval']} tick(s)")
+        print(f"   ratio {best['ratio_pct']} % | une vague toutes les {best['every_s']:g} s")
         print(f"   → {best['tiles_per_sec']} tuiles/s "
               f"({best['tiles_gained']} tuiles en {best['duration_s']:g} s de jeu, "
               f"{best['land_pct'] * 100:.1f} % de la carte)")

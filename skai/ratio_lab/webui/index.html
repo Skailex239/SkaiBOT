@@ -133,8 +133,9 @@
   <div>
     <h1><span class="logo">⚔️ RatioLab</span> — records du bot</h1>
     <div class="sub">
-      Le bot teste toutes les combinaisons <b>ratio d'attaque (%)</b> × <b>cadence d'envoi</b>
-      sur une zone totalement verte et mesure la vitesse de conquête réelle.
+      Le bot teste toutes les combinaisons <b>ratio d'attaque (%)</b> × <b>fréquence d'envoi</b>
+      (une vague d'attaques toutes les N secondes) sur une zone totalement verte
+      et mesure la vitesse de conquête réelle.
     </div>
   </div>
   <div class="chip"><span class="dot" id="statusDot"></span><span id="statusTxt">chargement…</span></div>
@@ -172,8 +173,8 @@
         <input id="fRatios" spellcheck="false">
       </div>
       <div>
-        <label for="fIntervals">Cadences (ticks entre 2 vagues — 10 ticks = 1 s)</label>
-        <input id="fIntervals" spellcheck="false">
+        <label for="fEvery">Fréquence d'attaque (toutes les N secondes)</label>
+        <input id="fEvery" spellcheck="false">
       </div>
       <div>
         <label for="fDuration">Durée de chaque test (secondes de jeu)</label>
@@ -209,7 +210,7 @@
   <!-- ============================ MATRICE + COURBES ============================ -->
   <div class="grid2">
     <section>
-      <h2>📊 Matrice <small>ratio (lignes) × cadence (colonnes) — tuiles/s</small></h2>
+      <h2>📊 Matrice <small>ratio (lignes) × fréquence (colonnes) — tuiles/s</small></h2>
       <div class="heat" id="heatmap"><div class="empty">…</div></div>
       <div class="legend"><span>lent</span><span class="bar"></span><span>rapide</span></div>
       <div class="cell-detail" id="cellDetail">Clique sur une case pour voir le détail d'un combo.</div>
@@ -229,7 +230,7 @@
       <table>
         <thead>
           <tr>
-            <th>heure</th><th>ratio</th><th>cadence</th><th class="num">tuiles gagnées</th>
+            <th>heure</th><th>ratio</th><th>fréquence</th><th class="num">tuiles gagnées</th>
             <th class="num">tuiles/s</th><th class="num">% carte</th><th class="num">troupes fin</th>
             <th class="num">25 % atteint en</th><th>statut</th>
           </tr>
@@ -249,6 +250,11 @@ const fmt = (x, d = 1) => (x === null || x === undefined) ? "—" : Number(x).to
 let state = null;
 let selectedGroup = 0;
 let selectedCell = null;
+
+// « toutes les 0,5 s », « toutes les 2 s »…
+function fmtEvery(x) {
+  return Number(x).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " s";
+}
 
 // ------------------------------------------------------------------ données
 async function refresh() {
@@ -319,7 +325,7 @@ function renderRecordCard() {
     </div>
     <div class="record-conf">
       <div class="stat"><div class="v">${b.ratio_pct} %</div><div class="k">ratio d'attaque</div></div>
-      <div class="stat"><div class="v">${b.interval}</div><div class="k">ticks entre 2 vagues</div></div>
+      <div class="stat"><div class="v">${fmtEvery(b.every_s)}</div><div class="k">fréquence d'envoi</div></div>
       <div class="stat"><div class="v">${fmt(b.tiles_gained, 0)}</div><div class="k">tuiles gagnées</div></div>
       <div class="stat"><div class="v">${fmt((b.land_pct || 0) * 100, 1)} %</div><div class="k">de la carte</div></div>
     </div>`;
@@ -331,12 +337,12 @@ function renderLeaderboard() {
   if (!g || !g.leaderboard.length) { el.innerHTML = `<div class="empty">…</div>`; return; }
   const medals = ["🥇", "🥈", "🥉"];
   el.innerHTML = `<table>
-    <thead><tr><th>#</th><th>ratio</th><th>cadence</th><th class="num">tuiles/s</th><th class="num">tuiles</th><th class="num">% carte</th></tr></thead>
+    <thead><tr><th>#</th><th>ratio</th><th>fréquence</th><th class="num">tuiles/s</th><th class="num">tuiles</th><th class="num">% carte</th></tr></thead>
     <tbody>${g.leaderboard.slice(0, 10).map((r, i) => `
       <tr>
         <td class="medal">${medals[i] || `<span class="muted">${i + 1}</span>`}</td>
         <td>${r.ratio_pct} %</td>
-        <td>1 vague / ${r.interval} tick${r.interval > 1 ? "s" : ""}</td>
+        <td>toutes les ${fmtEvery(r.every_s)}</td>
         <td class="num tps">${fmt(r.tiles_per_sec, 1)}</td>
         <td class="num">${fmt(r.tiles_gained, 0)}</td>
         <td class="num">${fmt((r.land_pct || 0) * 100, 1)} %</td>
@@ -355,7 +361,7 @@ function renderTimeline() {
   let best = 0;
   for (const r of runs) {
     if (r.tiles_per_sec > best) {
-      events.push({ ts: r.ts, tps: r.tiles_per_sec, ratio: r.ratio_pct, interval: r.interval, delta: best ? (r.tiles_per_sec / best - 1) * 100 : null });
+      events.push({ ts: r.ts, tps: r.tiles_per_sec, ratio: r.ratio_pct, every: r.every_s, delta: best ? (r.tiles_per_sec / best - 1) * 100 : null });
       best = r.tiles_per_sec;
     }
   }
@@ -363,7 +369,7 @@ function renderTimeline() {
   el.innerHTML = events.slice(-8).reverse().map(e => `
     <li>
       <span class="t">${(e.ts || "").slice(11) || e.ts}</span>
-      <span>ratio <b>${e.ratio} %</b> · cadence <b>${e.interval}</b> → <span class="best">${fmt(e.tps, 1)} tuiles/s</span>
+      <span>ratio <b>${e.ratio} %</b> · toutes les <b>${fmtEvery(e.every)}</b> → <span class="best">${fmt(e.tps, 1)} tuiles/s</span>
       ${e.delta !== null ? `<span class="tag">+${fmt(e.delta, 0)} %</span>` : `<span class="tag">1er record</span>`}</span>
     </li>`).join("");
 }
@@ -381,16 +387,18 @@ function renderHeatmap() {
   const el = $("heatmap");
   if (!g) { el.innerHTML = `<div class="empty">…</div>`; return; }
   const matrix = g.matrix || {};
+  // clés de cases : "<ratio>x<every_s>" — les fréquences restent en chaînes
+  // ("0.5", "1.0"…) pour retrouver exactement les clés produites par Python.
   const ratios = [...new Set(Object.keys(matrix).map(k => +k.split("x")[0]))].sort((a, b) => b - a);
-  const intervals = [...new Set(Object.keys(matrix).map(k => +k.split("x")[1]))].sort((a, b) => a - b);
+  const everyKeys = [...new Set(Object.keys(matrix).map(k => k.split("x")[1]))].sort((a, b) => (+a) - (+b));
   if (!ratios.length) { el.innerHTML = `<div class="empty">…</div>`; return; }
   const values = Object.values(matrix).map(m => m.tiles_per_sec);
   const vmin = Math.min(...values), vmax = Math.max(...values);
 
-  let html = `<table><thead><tr><th></th>${intervals.map(it => `<th>${it} tick${it > 1 ? "s" : ""}</th>`).join("")}</tr></thead><tbody>`;
+  let html = `<table><thead><tr><th style="text-align:right">ratio ↓ &nbsp;fréquence →</th>${everyKeys.map(it => `<th>${fmtEvery(+it)}</th>`).join("")}</tr></thead><tbody>`;
   for (const ratio of ratios) {
     html += `<tr><td class="rowh">${ratio} %</td>`;
-    for (const it of intervals) {
+    for (const it of everyKeys) {
       const m = matrix[`${ratio}x${it}`];
       if (!m) { html += `<td class="cell" style="opacity:.25">—</td>`; continue; }
       const t = vmax > vmin ? (m.tiles_per_sec - vmin) / (vmax - vmin) : 1;
@@ -406,7 +414,7 @@ function renderHeatmap() {
       selectedCell = td.dataset.cell;
       const m = matrix[selectedCell];
       $("cellDetail").innerHTML = `
-        <b>Ratio ${m.ratio_pct} % · cadence 1 vague / ${m.interval} tick(s)</b><br>
+        <b>Ratio ${m.ratio_pct} % · une vague toutes les ${fmtEvery(m.every_s)}</b><br>
         <span class="muted">
         → <b style="color:var(--accent)">${fmt(m.tiles_per_sec, 1)} tuiles/s</b>
         (${fmt(m.tiles_gained, 0)} tuiles en ${fmt(m.active_ticks / 10, 0)} s de jeu,
@@ -433,15 +441,15 @@ function renderChart() {
   legend.innerHTML = "";
   if (!g) return;
 
-  // une ligne par cadence : x = ratio, y = tuiles/s (meilleure run de chaque case)
+  // une ligne par fréquence : x = ratio, y = tuiles/s (meilleure run de chaque case)
   const matrix = g.matrix || {};
-  const byInterval = {};
+  const byEvery = {};
   for (const [key, m] of Object.entries(matrix)) {
-    (byInterval[m.interval] ||= []).push(m);
+    (byEvery[m.every_s] ||= []).push(m);
   }
-  const intervals = Object.keys(byInterval).map(Number).sort((a, b) => a - b);
-  const allX = [...new Set(Object.values(byInterval).flat().map(m => m.ratio_pct))].sort((a, b) => a - b);
-  const allY = Object.values(byInterval).flat().map(m => m.tiles_per_sec);
+  const everyList = Object.keys(byEvery).map(Number).sort((a, b) => a - b);
+  const allX = [...new Set(Object.values(byEvery).flat().map(m => m.ratio_pct))].sort((a, b) => a - b);
+  const allY = Object.values(byEvery).flat().map(m => m.tiles_per_sec);
   if (!allX.length || !allY.length) return;
   const ymin = 0, ymax = Math.max(...allY) * 1.12 || 1;
   const padL = 56, padR = 12, padT = 14, padB = 30;
@@ -464,8 +472,8 @@ function renderChart() {
 
   // lignes
   const colors = ["#34d399", "#60a5fa", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"];
-  intervals.forEach((itv, li) => {
-    const pts = byInterval[itv].sort((a, b) => a.ratio_pct - b.ratio_pct);
+  everyList.forEach((itv, li) => {
+    const pts = byEvery[itv].sort((a, b) => a.ratio_pct - b.ratio_pct);
     const color = colors[li % colors.length];
     ctx.strokeStyle = color; ctx.lineWidth = 2.2;
     ctx.beginPath();
@@ -478,7 +486,7 @@ function renderChart() {
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(X(m.ratio_pct), Y(m.tiles_per_sec), 3.4, 0, Math.PI * 2); ctx.fill();
     }
-    legend.innerHTML += `<span class="k"><span class="swatch" style="background:${color}"></span>cadence ${itv} tick${itv > 1 ? "s" : ""}</span>`;
+    legend.innerHTML += `<span class="k"><span class="swatch" style="background:${color}"></span>toutes les ${fmtEvery(itv)}</span>`;
   });
 }
 
@@ -492,7 +500,7 @@ function renderRuns() {
     <tr>
       <td class="muted">${(r.ts || "").slice(11)}</td>
       <td>${r.ratio_pct} %</td>
-      <td>${r.interval} tick${r.interval > 1 ? "s" : ""}</td>
+      <td>toutes les ${fmtEvery(r.every_s)}</td>
       <td class="num">${fmt(r.tiles_gained, 0)}</td>
       <td class="num tps">${fmt(r.tiles_per_sec, 1)}</td>
       <td class="num">${fmt((r.land_pct || 0) * 100, 1)} %</td>
@@ -520,7 +528,7 @@ function renderProgress() {
 async function launch() {
   const params = {
     ratios: $("fRatios").value,
-    intervals: $("fIntervals").value,
+    every: $("fEvery").value,
     duration_s: parseFloat($("fDuration").value),
     map: $("fMap").value,
     repeats: parseInt($("fRepeats").value, 10),
@@ -563,7 +571,7 @@ window.addEventListener("resize", () => renderChart());
   await refresh();
   const d = state.defaults || {};
   $("fRatios").value = d.ratios || "";
-  $("fIntervals").value = d.intervals || "";
+  $("fEvery").value = d.every || "";
   $("fDuration").value = d.duration_s || 60;
   $("fRepeats").value = d.repeats || 1;
   $("fJobs").value = d.jobs || 1;

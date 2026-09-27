@@ -140,7 +140,8 @@ Suivi de l'apprentissage : `tensorboard --logdir skai/models/logs` (ouvrir http:
 ## ⚔️ RatioLab — le bot qui teste tous les ratios d'attaque
 
 **[`skai/ratio_lab/`](skai/ratio_lab/)** balaye toutes les combinaisons
-**ratio d'attaque (%) × cadence d'envoi** sur une **zone totalement verte**
+**ratio d'attaque (%) × fréquence d'envoi** (une vague d'attaques toutes les
+N secondes) sur une **zone totalement verte**
 (1 joueur, vraies règles `DefaultConfig`) et mesure la **vitesse de conquête
 réelle** de chaque combinaison. Le temps de chaque test est configurable
 (défaut : 1 minute de jeu), et une petite **UI web** affiche les **records**.
@@ -153,9 +154,9 @@ python skai/ratio_lab/sweep.py
 python skai/ratio_lab/server.py          # http://localhost:8080
 ```
 
-L'UI permet aussi de **lancer un balayage à chaud** (ratios, cadences, durée
+L'UI permet aussi de **lancer un balayage à chaud** (ratios, fréquences, durée
 configurables) et d'afficher : record absolu, top 10, historique des records,
-matrice ratio × cadence, courbes de vitesse. Détails :
+matrice ratio × fréquence, courbes de vitesse. Détails :
 **[`skai/ratio_lab/README.md`](skai/ratio_lab/README.md)**.
 
 ---
