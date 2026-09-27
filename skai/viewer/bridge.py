@@ -110,6 +110,7 @@ class GameBridge:
         spawn_mode: Optional[str] = None,
         spawn_seed: Optional[int] = None,
         verbose: bool = False,
+        allow_multi_front: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Démarre une partie.
 
@@ -118,6 +119,8 @@ class GameBridge:
         game_config  : "default" = vraies règles d'OpenFront, "test" = ancien comportement
                        (TestConfig, conquête bridée à 1 tuile/tick).
         win_threshold: fraction des TUILES TERRESTRES nécessaire pour `has_won`.
+        allow_multi_front : autorise plusieurs fronts simultanés contre le même
+                       adversaire (utilisé par le bot ratio-lab). Désactivé par défaut.
         """
         cmd: Dict[str, Any] = {"type": "reset", "map_name": map_name, "num_players": num_players}
         if obs_size:
@@ -134,6 +137,8 @@ class GameBridge:
             cmd["spawn_seed"] = int(spawn_seed) & 0x7FFFFFFF
         if verbose:
             cmd["verbose"] = True
+        if allow_multi_front is not None:
+            cmd["allow_multi_front"] = bool(allow_multi_front)
         r = self._send(cmd)
         return r.get("state", r)
 

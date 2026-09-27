@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RatioLab — records du bot d'attaque</title>
+<style>
+  :root {
+    --bg: #0e1420; --panel: #17202f; --panel2: #1d2839; --line: #2a3850;
+    --text: #e8eef7; --muted: #93a3b8; --accent: #34d399; --accent2: #60a5fa;
+    --gold: #fbbf24; --silver: #cbd5e1; --bronze: #d97706; --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    background-image: radial-gradient(1200px 500px at 80% -10%, rgba(52,211,153,.08), transparent),
+                      radial-gradient(900px 400px at 10% 0%, rgba(96,165,250,.07), transparent);
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;
+    padding: 22px 28px 18px; border-bottom: 1px solid var(--line);
+  }
+  h1 { margin: 0; font-size: 26px; letter-spacing: .3px; }
+  h1 .logo { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px;
+    border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 13px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+  .dot.busy { background: var(--gold); animation: pulse 1.2s infinite; }
+  .dot.err  { background: var(--danger); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  main { max-width: 1280px; margin: 0 auto; padding: 22px 28px 60px; }
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 22px;
+  }
+  h2 { margin: 0 0 14px; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  h2 small { color: var(--muted); font-weight: normal; font-size: 12.5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 980px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* Podium */
+  .record-card {
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, rgba(52,211,153,.14), rgba(96,165,250,.10));
+    border: 1px solid rgba(52,211,153,.35); border-radius: 12px; padding: 18px 20px;
+  }
+  .record-big { font-size: 38px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+  .record-big span { font-size: 15px; color: var(--muted); font-weight: normal; }
+  .record-conf { display: flex; gap: 22px; flex-wrap: wrap; }
+  .stat { min-width: 90px; }
+  .stat .v { font-size: 20px; font-weight: 650; }
+  .stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+
+  /* Tables */
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  .medal { font-size: 16px; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .tps { color: var(--accent); font-weight: 650; }
+
+  /* Formulaire */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; letter-spacing: .4px; }
+  input, select {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--text); font-size: 14px;
+  }
+  input:focus, select:focus { outline: 2px solid rgba(52,211,153,.45); border-color: transparent; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    background: var(--accent); color: #06281c; font-weight: 700; font-size: 14.5px;
+    border: 0; border-radius: 10px; padding: 11px 22px; margin-top: 16px;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--line); margin-top: 0; }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); margin-top: 0; }
+
+  /* Progression */
+  .progress { height: 10px; background: var(--panel2); border-radius: 999px; overflow: hidden; margin: 14px 0 6px; }
+  .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .4s; }
+  .progress-txt { color: var(--muted); font-size: 12.5px; }
+
+  /* Heatmap */
+  .heat { overflow-x: auto; }
+  .heat table { width: auto; min-width: 100%; }
+  .heat td.cell {
+    text-align: center; border: 2px solid var(--panel); border-radius: 8px; cursor: pointer;
+    font-variant-numeric: tabular-nums; font-weight: 600; min-width: 72px; padding: 10px 8px;
+  }
+  .heat td.cell:hover { border-color: var(--text); }
+  .heat td.cell.sel { border-color: var(--gold); }
+  .heat th { text-align: center; }
+  .heat td.rowh { color: var(--muted); font-weight: 600; text-align: right; padding-right: 12px; white-space: nowrap; }
+  .legend { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+  .legend .bar { height: 10px; width: 180px; border-radius: 999px; background: linear-gradient(90deg, rgb(30,58,95), rgb(52,211,153)); }
+  .cell-detail {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--panel2);
+    border: 1px solid var(--line); font-size: 13.5px; min-height: 44px;
+  }
+
+  /* Courbes */
+  #chart { width: 100%; height: 320px; display: block; }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .chart-legend .k { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  /* Timeline des records */
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li {
+    display: flex; gap: 12px; align-items: baseline; padding: 8px 2px;
+    border-bottom: 1px dashed var(--line); font-size: 13.5px;
+  }
+  .timeline .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .timeline .best { color: var(--gold); font-weight: 700; }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+  .tag.ok { color: var(--accent); border-color: rgba(52,211,153,.4); }
+  .tag.err { color: var(--danger); border-color: rgba(248,113,113,.4); }
+  .empty { color: var(--muted); padding: 18px 6px; text-align: center; }
+  .rowflex { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1><span class="logo">⚔️ RatioLab</span> — records du bot</h1>
+    <div class="sub">
+      Le bot teste toutes les combinaisons <b>ratio d'attaque (%)</b> × <b>cadence d'envoi</b>
+      sur une zone totalement verte et mesure la vitesse de conquête réelle.
+    </div>
+  </div>
+  <div class="chip"><span class="dot" id="statusDot"></span><span id="statusTxt">chargement…</span></div>
+</header>
+
+<main>
+
+  <!-- ============================ RECORDS ============================ -->
+  <section>
+    <h2>🏆 Records <small id="groupLabel"></small></h2>
+    <div class="rowflex" style="margin-bottom:14px">
+      <label style="margin:0">Groupe de tests (carte / durée)</label>
+      <select id="groupSelect" style="max-width:420px"></select>
+    </div>
+    <div id="recordCard" class="empty">Aucun record pour l'instant — lance un balayage ci-dessous.</div>
+
+    <div class="grid2" style="margin-top:20px">
+      <div>
+        <h2 style="font-size:15px">Classement général <small>top 10 — tuiles/s</small></h2>
+        <div id="leaderboard"><div class="empty">…</div></div>
+      </div>
+      <div>
+        <h2 style="font-size:15px">🏅 Historique des records <small>quand un combo a battu le précédent</small></h2>
+        <ul id="timeline" class="timeline"><li class="muted">…</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ LANCER ============================ -->
+  <section>
+    <h2>🧪 Lancer un balayage <small>le temps de chaque test est configurable (défaut : 1 minute)</small></h2>
+    <div class="form-grid">
+      <div>
+        <label for="fRatios">Ratios d'attaque (%) — % des troupes envoyées</label>
+        <input id="fRatios" spellcheck="false">
+      </div>
+      <div>
+        <label for="fIntervals">Cadences (ticks entre 2 vagues — 10 ticks = 1 s)</label>
+        <input id="fIntervals" spellcheck="false">
+      </div>
+      <div>
+        <label for="fDuration">Durée de chaque test (secondes de jeu)</label>
+        <input id="fDuration" type="number" min="5" max="3600" step="5">
+      </div>
+      <div>
+        <label for="fMap">Carte (zone verte = 1 joueur)</label>
+        <select id="fMap">
+          <option value="australia_100x100_nt">australia_100x100_nt — 100 % de terres ⚡</option>
+          <option value="australia_100x100">australia_100x100 — vraie géographie</option>
+          <option value="australia_256x256">australia_256x256 — sans océan</option>
+          <option value="australia_500x500_nt">australia_500x500_nt — grande</option>
+          <option value="australia_real_500x375">australia_real_500x375 — carte réelle</option>
+        </select>
+      </div>
+      <div>
+        <label for="fRepeats">Répétitions par combinaison</label>
+        <input id="fRepeats" type="number" min="1" max="10">
+      </div>
+      <div>
+        <label for="fJobs">Tests en parallèle</label>
+        <input id="fJobs" type="number" min="1" max="8">
+      </div>
+    </div>
+    <div class="rowflex" style="margin-top:6px">
+      <button class="btn" id="btnLaunch">🚀 Lancer le balayage</button>
+      <button class="btn danger" id="btnClear">🗑️ Effacer les résultats</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+    <div class="progress-txt" id="progressTxt">Prêt.</div>
+  </section>
+
+  <!-- ============================ MATRICE + COURBES ============================ -->
+  <div class="grid2">
+    <section>
+      <h2>📊 Matrice <small>ratio (lignes) × cadence (colonnes) — tuiles/s</small></h2>
+      <div class="heat" id="heatmap"><div class="empty">…</div></div>
+      <div class="legend"><span>lent</span><span class="bar"></span><span>rapide</span></div>
+      <div class="cell-detail" id="cellDetail">Clique sur une case pour voir le détail d'un combo.</div>
+    </section>
+
+    <section>
+      <h2>📈 Courbes <small>vitesse de conquête selon le ratio</small></h2>
+      <canvas id="chart"></canvas>
+      <div class="chart-legend" id="chartLegend"></div>
+    </section>
+  </div>
+
+  <!-- ============================ HISTORIQUE ============================ -->
+  <section>
+    <h2>📋 Historique des tests <small id="runsCount"></small></h2>
+    <div style="max-height:420px;overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>heure</th><th>ratio</th><th>cadence</th><th class="num">tuiles gagnées</th>
+            <th class="num">tuiles/s</th><th class="num">% carte</th><th class="num">troupes fin</th>
+            <th class="num">25 % atteint en</th><th>statut</th>
+          </tr>
+        </thead>
+        <tbody id="runsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const fmt = (x, d = 1) => (x === null || x === undefined) ? "—" : Number(x).toLocaleString("fr-FR", { maximumFractionDigits: d, minimumFractionDigits: 0 });
+
+let state = null;
+let selectedGroup = 0;
+let selectedCell = null;
+
+// ------------------------------------------------------------------ données
+async function refresh() {
+  try {
+    const r = await fetch("/api/state");
+    state = await r.json();
+    render();
+  } catch (e) {
+    $("statusTxt").textContent = "serveur injoignable";
+    $("statusDot").className = "dot err";
+  }
+}
+
+function activeGroup() {
+  const groups = (state?.records?.groups) || [];
+  if (!groups.length) return null;
+  return groups[Math.min(selectedGroup, groups.length - 1)];
+}
+
+// ------------------------------------------------------------------ rendu
+function render() {
+  renderStatus();
+  renderGroups();
+  renderRecordCard();
+  renderLeaderboard();
+  renderTimeline();
+  renderHeatmap();
+  renderChart();
+  renderRuns();
+  renderProgress();
+}
+
+function renderStatus() {
+  const s = state.status || {};
+  const dot = $("statusDot"), txt = $("statusTxt");
+  if (s.running) {
+    dot.className = "dot busy";
+    txt.textContent = `balayage en cours — ${s.done}/${s.total}${s.current ? " · " + s.current : ""}`;
+  } else if (s.error) {
+    dot.className = "dot err";
+    txt.textContent = "erreur : " + s.error;
+  } else {
+    dot.className = "dot";
+    txt.textContent = "prêt — records à jour";
+  }
+}
+
+function renderGroups() {
+  const groups = (state?.records?.groups) || [];
+  const sel = $("groupSelect");
+  sel.innerHTML = groups.map((g, i) =>
+    `<option value="${i}" ${i === selectedGroup ? "selected" : ""}>${g.map} — ${g.duration_s}s de jeu · ${g.n_runs} tests</option>`
+  ).join("") || `<option>aucun groupe</option>`;
+  const g = activeGroup();
+  $("groupLabel").textContent = g ? `— ${g.map}, ${g.duration_s} s de jeu` : "";
+}
+
+function renderRecordCard() {
+  const g = activeGroup();
+  const el = $("recordCard");
+  if (!g) { el.className = "empty"; el.textContent = "Aucun record pour l'instant — lance un balayage ci-dessous."; return; }
+  const b = g.best_overall;
+  el.className = "record-card";
+  el.innerHTML = `
+    <div>
+      <div class="record-big">${fmt(b.tiles_per_sec, 1)} <span>tuiles / seconde de jeu</span></div>
+      <div class="muted" style="margin-top:6px">meilleure vitesse de conquête jamais atteinte sur ce groupe</div>
+    </div>
+    <div class="record-conf">
+      <div class="stat"><div class="v">${b.ratio_pct} %</div><div class="k">ratio d'attaque</div></div>
+      <div class="stat"><div class="v">${b.interval}</div><div class="k">ticks entre 2 vagues</div></div>
+      <div class="stat"><div class="v">${fmt(b.tiles_gained, 0)}</div><div class="k">tuiles gagnées</div></div>
+      <div class="stat"><div class="v">${fmt((b.land_pct || 0) * 100, 1)} %</div><div class="k">de la carte</div></div>
+    </div>`;
+}
+
+function renderLeaderboard() {
+  const g = activeGroup();
+  const el = $("leaderboard");
+  if (!g || !g.leaderboard.length) { el.innerHTML = `<div class="empty">…</div>`; return; }
+  const medals = ["🥇", "🥈", "🥉"];
+  el.innerHTML = `<table>
+    <thead><tr><th>#</th><th>ratio</th><th>cadence</th><th class="num">tuiles/s</th><th class="num">tuiles</th><th class="num">% carte</th></tr></thead>
+    <tbody>${g.leaderboard.slice(0, 10).map((r, i) => `
+      <tr>
+        <td class="medal">${medals[i] || `<span class="muted">${i + 1}</span>`}</td>
+        <td>${r.ratio_pct} %</td>
+        <td>1 vague / ${r.interval} tick${r.interval > 1 ? "s" : ""}</td>
+        <td class="num tps">${fmt(r.tiles_per_sec, 1)}</td>
+        <td class="num">${fmt(r.tiles_gained, 0)}</td>
+        <td class="num">${fmt((r.land_pct || 0) * 100, 1)} %</td>
+      </tr>`).join("")}</tbody></table>`;
+}
+
+function renderTimeline() {
+  const g = activeGroup();
+  const el = $("timeline");
+  if (!g) { el.innerHTML = `<li class="muted">…</li>`; return; }
+  // Recalcule les records au fil du temps pour CE groupe, à partir de l'historique.
+  const runs = (state.runs || [])
+    .filter(r => r.map === g.map && r.duration_s === g.duration_s && typeof r.tiles_per_sec === "number")
+    .sort((a, b) => (a.ts || "").localeCompare(b.ts || ""));
+  const events = [];
+  let best = 0;
+  for (const r of runs) {
+    if (r.tiles_per_sec > best) {
+      events.push({ ts: r.ts, tps: r.tiles_per_sec, ratio: r.ratio_pct, interval: r.interval, delta: best ? (r.tiles_per_sec / best - 1) * 100 : null });
+      best = r.tiles_per_sec;
+    }
+  }
+  if (!events.length) { el.innerHTML = `<li class="muted">…</li>`; return; }
+  el.innerHTML = events.slice(-8).reverse().map(e => `
+    <li>
+      <span class="t">${(e.ts || "").slice(11) || e.ts}</span>
+      <span>ratio <b>${e.ratio} %</b> · cadence <b>${e.interval}</b> → <span class="best">${fmt(e.tps, 1)} tuiles/s</span>
+      ${e.delta !== null ? `<span class="tag">+${fmt(e.delta, 0)} %</span>` : `<span class="tag">1er record</span>`}</span>
+    </li>`).join("");
+}
+
+// ------------------------------------------------------------------ heatmap
+function heatColor(t) {
+  // t=0 → bleu foncé, t=1 → vert
+  const c0 = [30, 58, 95], c1 = [52, 211, 153];
+  const c = c0.map((v, i) => Math.round(v + (c1[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function renderHeatmap() {
+  const g = activeGroup();
+  const el = $("heatmap");
+  if (!g) { el.innerHTML = `<div class="empty">…</div>`; return; }
+  const matrix = g.matrix || {};
+  const ratios = [...new Set(Object.keys(matrix).map(k => +k.split("x")[0]))].sort((a, b) => b - a);
+  const intervals = [...new Set(Object.keys(matrix).map(k => +k.split("x")[1]))].sort((a, b) => a - b);
+  if (!ratios.length) { el.innerHTML = `<div class="empty">…</div>`; return; }
+  const values = Object.values(matrix).map(m => m.tiles_per_sec);
+  const vmin = Math.min(...values), vmax = Math.max(...values);
+
+  let html = `<table><thead><tr><th></th>${intervals.map(it => `<th>${it} tick${it > 1 ? "s" : ""}</th>`).join("")}</tr></thead><tbody>`;
+  for (const ratio of ratios) {
+    html += `<tr><td class="rowh">${ratio} %</td>`;
+    for (const it of intervals) {
+      const m = matrix[`${ratio}x${it}`];
+      if (!m) { html += `<td class="cell" style="opacity:.25">—</td>`; continue; }
+      const t = vmax > vmin ? (m.tiles_per_sec - vmin) / (vmax - vmin) : 1;
+      const sel = selectedCell === `${ratio}x${it}` ? " sel" : "";
+      html += `<td class="cell${sel}" data-cell="${ratio}x${it}" style="background:${heatColor(t)};color:${t > 0.55 ? "#06281c" : "#e8eef7"}">${fmt(m.tiles_per_sec, 0)}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  el.innerHTML = html;
+  el.querySelectorAll("td.cell[data-cell]").forEach(td => {
+    td.addEventListener("click", () => {
+      selectedCell = td.dataset.cell;
+      const m = matrix[selectedCell];
+      $("cellDetail").innerHTML = `
+        <b>Ratio ${m.ratio_pct} % · cadence 1 vague / ${m.interval} tick(s)</b><br>
+        <span class="muted">
+        → <b style="color:var(--accent)">${fmt(m.tiles_per_sec, 1)} tuiles/s</b>
+        (${fmt(m.tiles_gained, 0)} tuiles en ${fmt(m.active_ticks / 10, 0)} s de jeu,
+        ${fmt((m.land_pct || 0) * 100, 1)} % de la carte, ${fmt(m.troops_end, 0)} troupes restantes)
+        ${m.t25_ticks ? ` · 25 % de la carte atteint en ${fmt(m.t25_ticks / 10, 1)} s` : ""}
+        </span>`;
+      renderHeatmap();
+    });
+  });
+  if (!selectedCell) $("cellDetail").textContent = "Clique sur une case pour voir le détail d'un combo.";
+}
+
+// ------------------------------------------------------------------ courbes
+function renderChart() {
+  const g = activeGroup();
+  const canvas = $("chart");
+  const legend = $("chartLegend");
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = 320;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  legend.innerHTML = "";
+  if (!g) return;
+
+  // une ligne par cadence : x = ratio, y = tuiles/s (meilleure run de chaque case)
+  const matrix = g.matrix || {};
+  const byInterval = {};
+  for (const [key, m] of Object.entries(matrix)) {
+    (byInterval[m.interval] ||= []).push(m);
+  }
+  const intervals = Object.keys(byInterval).map(Number).sort((a, b) => a - b);
+  const allX = [...new Set(Object.values(byInterval).flat().map(m => m.ratio_pct))].sort((a, b) => a - b);
+  const allY = Object.values(byInterval).flat().map(m => m.tiles_per_sec);
+  if (!allX.length || !allY.length) return;
+  const ymin = 0, ymax = Math.max(...allY) * 1.12 || 1;
+  const padL = 56, padR = 12, padT = 14, padB = 30;
+  const xw = W - padL - padR, yh = H - padT - padB;
+  const X = (v) => padL + (allX.length > 1 ? (v - allX[0]) / (allX[allX.length - 1] - allX[0]) * xw : xw / 2);
+  const Y = (v) => padT + yh - (v - ymin) / (ymax - ymin) * yh;
+
+  // grille
+  ctx.strokeStyle = "rgba(147,163,184,.18)"; ctx.fillStyle = "rgba(147,163,184,.9)";
+  ctx.font = "11px system-ui"; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = ymin + (ymax - ymin) * i / 4, y = Y(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillText(fmt(v, 0), 8, y + 4);
+  }
+  for (const x of allX) {
+    ctx.fillText(x + "%", X(x) - 10, H - 10);
+  }
+  ctx.fillText("ratio d'attaque →", padL, H - 10);
+
+  // lignes
+  const colors = ["#34d399", "#60a5fa", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"];
+  intervals.forEach((itv, li) => {
+    const pts = byInterval[itv].sort((a, b) => a.ratio_pct - b.ratio_pct);
+    const color = colors[li % colors.length];
+    ctx.strokeStyle = color; ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    pts.forEach((m, i) => {
+      const x = X(m.ratio_pct), y = Y(m.tiles_per_sec);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    for (const m of pts) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(X(m.ratio_pct), Y(m.tiles_per_sec), 3.4, 0, Math.PI * 2); ctx.fill();
+    }
+    legend.innerHTML += `<span class="k"><span class="swatch" style="background:${color}"></span>cadence ${itv} tick${itv > 1 ? "s" : ""}</span>`;
+  });
+}
+
+// ------------------------------------------------------------------ historique
+function renderRuns() {
+  const runs = (state.runs || []).slice().reverse();
+  $("runsCount").textContent = runs.length ? `${runs.length} tests enregistrés` : "";
+  const body = $("runsBody");
+  if (!runs.length) { body.innerHTML = `<tr><td colspan="9" class="empty">Aucun test pour l'instant.</td></tr>`; return; }
+  body.innerHTML = runs.map(r => `
+    <tr>
+      <td class="muted">${(r.ts || "").slice(11)}</td>
+      <td>${r.ratio_pct} %</td>
+      <td>${r.interval} tick${r.interval > 1 ? "s" : ""}</td>
+      <td class="num">${fmt(r.tiles_gained, 0)}</td>
+      <td class="num tps">${fmt(r.tiles_per_sec, 1)}</td>
+      <td class="num">${fmt((r.land_pct || 0) * 100, 1)} %</td>
+      <td class="num">${fmt(r.troops_end, 0)}</td>
+      <td class="num">${r.t25_ticks ? fmt(r.t25_ticks / 10, 1) + " s" : "—"}</td>
+      <td><span class="tag ${r.status === "ok" || r.status === "won" ? "ok" : "err"}">${r.status}${r.status === "won" ? " 🏆" : ""}</span></td>
+    </tr>`).join("");
+}
+
+function renderProgress() {
+  const s = state.status || {};
+  const bar = $("progressBar"), txt = $("progressTxt");
+  const pct = s.total ? (s.done / s.total) * 100 : 0;
+  bar.style.width = pct + "%";
+  if (s.running) {
+    txt.textContent = `Test ${s.done}/${s.total} — ${s.current || "démarrage…"}${s.params ? ` · ${s.params.map}, ${s.params.duration_s} s par test` : ""}`;
+    $("btnLaunch").disabled = true;
+  } else {
+    txt.textContent = s.finished_at ? `Dernier balayage terminé à ${s.finished_at}.` : "Prêt.";
+    $("btnLaunch").disabled = false;
+  }
+}
+
+// ------------------------------------------------------------------ actions
+async function launch() {
+  const params = {
+    ratios: $("fRatios").value,
+    intervals: $("fIntervals").value,
+    duration_s: parseFloat($("fDuration").value),
+    map: $("fMap").value,
+    repeats: parseInt($("fRepeats").value, 10),
+    jobs: parseInt($("fJobs").value, 10),
+  };
+  $("btnLaunch").disabled = true;
+  try {
+    const r = await fetch("/api/sweep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const out = await r.json();
+    if (!r.ok) throw new Error(out.error || "échec du lancement");
+    $("progressTxt").textContent = "Balayage lancé !";
+    refresh();
+  } catch (e) {
+    alert("Impossible de lancer le balayage : " + e.message);
+    $("btnLaunch").disabled = false;
+  }
+}
+
+async function clearAll() {
+  if (!confirm("Effacer tous les résultats et records enregistrés ?")) return;
+  await fetch("/api/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  refresh();
+}
+
+$("btnLaunch").addEventListener("click", launch);
+$("btnClear").addEventListener("click", clearAll);
+$("groupSelect").addEventListener("change", (e) => {
+  selectedGroup = parseInt(e.target.value, 10) || 0;
+  selectedCell = null;
+  render();
+});
+window.addEventListener("resize", () => renderChart());
+
+// Pré-remplit le formulaire avec les défauts du serveur, puis boucle de rafraîchissement.
+(async function init() {
+  await refresh();
+  const d = state.defaults || {};
+  $("fRatios").value = d.ratios || "";
+  $("fIntervals").value = d.intervals || "";
+  $("fDuration").value = d.duration_s || 60;
+  $("fRepeats").value = d.repeats || 1;
+  $("fJobs").value = d.jobs || 1;
+  if (d.map) $("fMap").value = d.map;
+  setInterval(refresh, 2500);
+})();
+</script>
+</body>
+</html>

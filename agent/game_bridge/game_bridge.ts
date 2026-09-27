@@ -122,6 +122,8 @@ interface Command {
   spawn_mode?: string;    // NEW: 'land' (défaut) | 'ring' (ancien comportement)
   spawn_seed?: number;    // NEW: graine de placement (diversifie les départs entre épisodes)
   obs_size?: number;      // NEW: downsample territory_map to this square size (0 = full res)
+  allow_multi_front?: boolean; // NEW: autorise plusieurs fronts simultanés vs le même adversaire
+                              // (ratio-lab). Désactivé par défaut pour l'entraînement RL.
   // NEW: Building commands
   unit_type?: string;    // 'City', 'Port', 'Missile Silo', 'SAM Launcher', 'Defense Post'
   tile_x?: number;       // Normalized 0-1 position for building/nuke target
@@ -174,6 +176,10 @@ class GameBridge {
   // Sending a full 500x500 map as JSON text costs ~750 kB per tick, which made the
   // bridge crawl at ~12 ticks/s (measured) - the serialisation, not the simulation.
   private obsSize: number = 0;
+  // SKAI (ratio-lab): when true, the "front already carries enough troops" guard is
+  // skipped so a sweep bot may hold several simultaneous fronts against the same
+  // target (e.g. terra nullius). Off by default: RL training relies on the guard.
+  private allowMultiFront: boolean = false;
 
   constructor() {
     this.log('GameBridge Phase 5 initialized (Clean with working attacks)');
@@ -827,6 +833,8 @@ class GameBridge {
     // The engine merges same-target attacks, so re-issuing each tick only moved
     // troops into an ever-growing attack that conquered nothing more
     // (measured: 0.5% territory, rank 6/6, 120 000 troops locked in flight).
+    // SKAI (ratio-lab): `allow_multi_front` disables this guard for the ratio sweep
+    // bot, which legitimately explores several simultaneous fronts vs terra nullius.
     const active = this.rlPlayer.outgoingAttacks().filter((a) => a.isActive());
     // SKAI: at most a handful of concurrent fronts, like a human micromanaging.
     if (active.length >= this.maxAttacks) {
@@ -834,10 +842,12 @@ class GameBridge {
       return false;
     }
     // SKAI: reinforcing a front is allowed, re-charging it every tick is not.
-    for (const at of active) {
-      if (at.target().id() === bestTargetId && at.troops() >= attackTroops) {
-        if (this.verbose) this.log(`attack refused: front already carries ${at.troops()} troops vs offer ${attackTroops}`);
-        return false;
+    if (!this.allowMultiFront) {
+      for (const at of active) {
+        if (at.target().id() === bestTargetId && at.troops() >= attackTroops) {
+          if (this.verbose) this.log(`attack refused: front already carries ${at.troops()} troops vs offer ${attackTroops}`);
+          return false;
+        }
       }
     }
 
@@ -1278,6 +1288,10 @@ class GameBridge {
     this.maxAttacks = Math.max(1, Math.min(12, Math.floor(n)));
   }
 
+  setAllowMultiFront(v: boolean) {
+    this.allowMultiFront = !!v;
+  }
+
   setGameConfigMode(m: 'default' | 'test') {
     this.gameConfigMode = m === 'test' ? 'test' : 'default';
   }
@@ -1321,6 +1335,7 @@ async function main() {
           bridge.setVerbose(command.verbose ?? false);
           if (command.game_config) bridge.setGameConfigMode(command.game_config as any);
           if (command.max_attacks !== undefined) bridge.setMaxAttacks(command.max_attacks);
+          if (command.allow_multi_front !== undefined) bridge.setAllowMultiFront(command.allow_multi_front);
           if (command.spawn_mode) bridge.spawnMode = command.spawn_mode === 'ring' ? 'ring' : 'land';
           if (command.spawn_seed !== undefined) bridge.spawnSeed = command.spawn_seed >>> 0;
           if (command.obs_size !== undefined) bridge.obsSize = Math.max(0, Math.floor(command.obs_size));
